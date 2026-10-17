@@ -1,4 +1,4 @@
-"""Desktop system control for Paradox Jarvis Ultra (Phase 6, desktop only).
+"""Desktop system control for Paradox Jarvis (Phase 6, desktop only).
 
 GUI / system-control surface: window management, app launching, and
 file operations integrated with the agent. Every consequential action

@@ -336,7 +336,7 @@ def _run_setup_extras(
                 console.print("    export NIM_API_KEY=<your key>")
                 console.print("  The wizard does not store API keys.")
         console.print()
-        console.print("[bold]Telegram owner bot[/bold] (Enter to skip)")
+        console.print("[bold]Telegram admin bot[/bold] (Enter to skip)")
         token = click.prompt(
             "Bot token (hidden)",
             hide_input=True,
@@ -353,11 +353,11 @@ def _run_setup_extras(
             else:
                 _verify_telegram_token(token, console)
                 chat_id = click.prompt(
-                    "Owner chat ID", default="", show_default=False
+                    "Admin chat ID", default="", show_default=False
                 ).strip()
                 if chat_id:
                     _patch_config_toml(telegram_chat_id=chat_id)
-                    console.print(f"  Owner chat ID saved to {DEFAULT_CONFIG_PATH}.")
+                    console.print(f"  Admin chat ID saved to {DEFAULT_CONFIG_PATH}.")
                     console.print(
                         "  Add the token to your shell profile "
                         "(never stored by the wizard):"

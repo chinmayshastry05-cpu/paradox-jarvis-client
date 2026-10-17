@@ -1,4 +1,4 @@
-"""Tests for the Phase 2 licence/integration registry."""
+"""Tests for the licence/integration registry."""
 
 import pytest
 
@@ -8,7 +8,7 @@ from openjarvis.integrations.registry import (
     ensure_copy_blocked,
 )
 
-# The 25 delivered-inventory entries from the matrix must all be present.
+# The delivered-inventory entries must all be present.
 DELIVERED_KEYS = {
     "cactus",
     "open-higgsfield-ai",
@@ -29,11 +29,6 @@ DELIVERED_KEYS = {
     "hermes-agent",
     "claude-code-router",
     "agentic-browser-bridge",
-    "studyreels",
-    "tally-llm",
-    "clientops-ai-demo",
-    "risklabs",
-    "first-role-radar",
     "openclaw-skills",
 }
 
@@ -56,11 +51,6 @@ def test_blocked_entries_raise():
         "cactus",  # source-available
         "opendroid",  # unverified
         "gods-eye-view",
-        "studyreels",
-        "tally-llm",
-        "clientops-ai-demo",
-        "risklabs",
-        "first-role-radar",
         "open-higgsfield-ai",
         "open-generative-ai",
     ]:
@@ -78,7 +68,7 @@ def test_permissive_entries_use_interface_not_copy():
 
 def test_blocked_entries_cover_agpl_and_unverified():
     blocked = {d.key for d in registry.blocked_entries()}
-    assert {"openmontage", "cactus", "opendroid", "studyreels"} <= blocked
+    assert {"openmontage", "cactus", "opendroid"} <= blocked
     assert "hermes-agent" not in blocked
     assert "agentic-browser-bridge" not in blocked
 

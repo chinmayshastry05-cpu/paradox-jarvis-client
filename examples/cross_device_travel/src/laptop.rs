@@ -191,11 +191,11 @@ mod tests {
             ("mobile_context".into(), json!({"origin": "Boston"})),
             (
                 "photo_interests".into(),
-                json!({"interests": ["museums", "gardens"]}),
+                json!({"interests": ["galleries", "gardens"]}),
             ),
         ]);
         let mut research = research_travel("Quebec City", &context).unwrap();
-        research["lodging_options"][0]["area"] = json!("Museum quarter");
+        research["lodging_options"][0]["area"] = json!("Gallery quarter");
         context.insert("research".into(), research);
         let plan = MockLaptopPlanner
             .plan(PlannerRequest {
@@ -206,11 +206,11 @@ mod tests {
         assert_eq!(plan["title"], "Hypothetical three-day Quebec City trip");
         assert_eq!(
             plan["itinerary"][1]["activity"],
-            "Explore museums in Quebec City"
+            "Explore galleries in Quebec City"
         );
         assert_eq!(
             plan["selected_options"]["lodging"]["area"],
-            "Museum quarter"
+            "Gallery quarter"
         );
         assert_eq!(plan["selected_options"]["transport"]["origin"], "Boston");
         assert_eq!(

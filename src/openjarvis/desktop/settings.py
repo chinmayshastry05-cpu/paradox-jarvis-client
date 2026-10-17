@@ -1,10 +1,10 @@
-"""Desktop GUI settings for Paradox Jarvis Ultra (Phase 6).
+"""Desktop GUI settings for Paradox Jarvis (Phase 6).
 
 Appearance + behaviour preferences for the desktop app. These are
 pure UI preferences — they NEVER disable the central confirmation gate,
 never carry secrets, and unknown keys are rejected so a stale client
 cannot silently smuggle in new behaviour. Persisted with the secure
-atomic writer (owner-only permissions).
+atomic writer (user-only permissions).
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ def load_settings(path: Optional[Path] = None) -> DesktopSettings:
 def save_settings(
     settings: DesktopSettings, path: Optional[Path] = None
 ) -> DesktopSettings:
-    """Validate + atomically persist settings (owner-only permissions)."""
+    """Validate + atomically persist settings (user-only permissions)."""
     settings.validate()
     target = Path(path) if path is not None else DEFAULT_SETTINGS_PATH
     secure_write_json(target, settings.to_dict())

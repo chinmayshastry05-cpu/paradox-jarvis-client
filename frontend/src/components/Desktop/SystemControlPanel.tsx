@@ -24,7 +24,7 @@ const APP_CHOICES = ['calculator', 'text_editor', 'browser', 'file_manager', 'te
 /**
  * Phase 6 desktop system-control surface.
  *
- * Attractive by requirement (owner, 2026-10-16): gradient hero, glass
+ * Attractive by design requirement: gradient hero, glass
  * cards, deliberate spacing — not a default unstyled panel. Every
  * consequential action shows an explicit approval step naming the
  * EXACT action + params before anything is sent; the server grant is

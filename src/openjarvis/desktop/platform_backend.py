@@ -1,4 +1,4 @@
-"""Real OS-automation desktop backends for Paradox Jarvis Ultra (Phase 6 gap).
+"""Real OS-automation desktop backends for Paradox Jarvis (Phase 6 gap).
 
 Replaces the :class:`NoOpDesktopBackend` stub with platform backends that
 drive a real desktop through OS tools — no new dependencies, no shell:
@@ -28,7 +28,7 @@ gated by the caller.
 Honest gap: this module is unit-tested with mocked subprocess calls
 only. Real mouse/keyboard/window behaviour on a real machine has NOT
 been live-tested (the dev VM is headless) and must not be claimed to
-work until it is, with Chinmay's explicit go-ahead.
+work until it is, with the deployer's explicit go-ahead.
 """
 
 from __future__ import annotations

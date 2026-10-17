@@ -1,4 +1,4 @@
-"""TelegramGateway — owner-only Telegram Bot API gateway.
+"""TelegramGateway — admin-only Telegram Bot API gateway.
 
 Wires an existing :class:`~openjarvis.channels.telegram.TelegramChannel`
 (Bot API long-polling, free) to an existing agent/system — it does NOT
@@ -20,8 +20,8 @@ build a parallel agent. Inbound Telegram messages flow:
    confirmation-required tool fails closed with "requires confirmation".
 4. Approvals are granted ONLY through :meth:`request_confirmation`,
    which trusted operator code calls when an action needs approval: it
-   registers a *pending* request (not an approval), sends the owner a
-   prompt with redacted arguments, and waits. The owner's ``YES <id>``
+   registers a *pending* request (not an approval), sends the admin a
+   prompt with redacted arguments, and waits. The admin's ``YES <id>``
    then calls ``gate.grant(tool, exact-args)``; the grant lives in the
    gate until the ``ToolExecutor`` consumes it exactly once via
    ``consume_matching`` for that exact tool + arguments, or it expires.
@@ -30,10 +30,10 @@ build a parallel agent. Inbound Telegram messages flow:
    grants nothing, and a second ``YES`` for the same id grants nothing
    (the pending entry is removed on first use).
 
-Owner-only rule: confirmations require a non-empty allowlist. If the
+Admin-only rule: confirmations require a non-empty allowlist. If the
 effective ``allowed_chat_ids`` is empty, :meth:`request_confirmation`
 raises and no ``YES`` reply can ever grant — an empty allowlist is
-treated as *not owner-only*. The gateway must share its
+treated as *not admin-only*. The gateway must share its
 ``ConfirmationGate`` instance with the ``ToolExecutor`` running the
 agent, or approvals granted via Telegram would never be consumed.
 
@@ -84,9 +84,9 @@ _DEFAULT_CONFIRMATION_TTL_SECONDS = 300.0
 
 @dataclass
 class PendingConfirmation:
-    """A confirmation request awaiting the owner's YES/NO — NOT an approval.
+    """A confirmation request awaiting the admin's YES/NO — NOT an approval.
 
-    An approval exists only after the owner says YES, when the gateway
+    An approval exists only after the admin says YES, when the gateway
     calls ``gate.grant`` for the exact (tool, arguments) pair.
     """
 
@@ -117,7 +117,7 @@ class TelegramGateway:
         callers that want Telegram approvals to reach the agent's
         ``ToolExecutor`` MUST pass the same instance the executor uses.
     allowed_chat_ids:
-        Comma-separated owner chat ids. If empty, the channel's own
+        Comma-separated admin chat ids. If empty, the channel's own
         ``_allowed_chat_ids`` is used. Confirmations are refused unless
         the effective allowlist is non-empty.
     confirmation_ttl_seconds:
@@ -238,16 +238,16 @@ class TelegramGateway:
         *,
         message_id: str = "",
     ) -> str:
-        """Ask the owner chat to approve ONE exact (tool, arguments) action.
+        """Ask the admin chat to approve ONE exact (tool, arguments) action.
 
-        Registers a pending request (not an approval) and sends the owner
-        a prompt with redacted arguments. The owner's ``YES <id>`` reply
+        Registers a pending request (not an approval) and sends the admin
+        a prompt with redacted arguments. The admin's ``YES <id>`` reply
         grants a single-use approval via the central gate; ``NO <id>``
         grants nothing. Raises ``ValueError`` when confirmations are not
-        owner-only (empty allowlist, chat not allowlisted, bad tool/args)
+        admin-only (empty allowlist, chat not allowlisted, bad tool/args)
         and ``RuntimeError`` if the prompt itself could not be delivered
         — in that case no pending request is left behind, so a later
-        ``YES`` cannot approve an action the owner never saw requested.
+        ``YES`` cannot approve an action the admin never saw requested.
         """
         if not tool_name or not isinstance(tool_name, str):
             raise ValueError("confirmation tool_name must be a non-empty string")
@@ -259,11 +259,11 @@ class TelegramGateway:
         if not allowlist:
             raise ValueError(
                 "Telegram confirmations require a non-empty allowed_chat_ids "
-                "owner allowlist; an empty allowlist is not owner-only, so "
+                "admin allowlist; an empty allowlist is not admin-only, so "
                 "no approval can be requested or granted via Telegram."
             )
         if str(chat_id) not in allowlist:
-            raise ValueError("confirmation chat_id is not in the owner allowlist")
+            raise ValueError("confirmation chat_id is not in the admin allowlist")
 
         self.purge_expired()
         now = time.time()
@@ -296,7 +296,7 @@ class TelegramGateway:
         except Exception:
             delivered = False
         if not delivered:
-            # The owner never saw the request: leave no pending approval
+            # The admin never saw the request: leave no pending approval
             # path behind. Fail closed.
             self._pending.pop(request_id, None)
             raise RuntimeError(

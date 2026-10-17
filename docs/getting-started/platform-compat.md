@@ -1,6 +1,6 @@
 # Platform Compatibility (Windows / WSL2 / macOS / Linux)
 
-How Paradox Jarvis Ultra behaves on each host OS, what Phase 5 fixed,
+How Paradox Jarvis (client edition) behaves on each host OS, what Phase 5 fixed,
 and what is still limited. Install entry points live in
 [Installation](install.md); this page is the compatibility matrix, not a
 second installer.
@@ -73,7 +73,7 @@ in `apply_patch` (a git patch-format token, not a filesystem path).
   (`sys.platform`, `os.name`, fake `msvcrt`). No real Windows or macOS
   machine, no real keychain daemon, and no live desktop run were
   involved. Treat native-Windows behaviour as implemented-but-unverified
-  until it is exercised on a real machine with the owner's go-ahead.
+  until it is exercised on a real machine with your go-ahead.
 - **Mining is Linux-oriented.** RAPL energy sampling reads
   `/sys/class/powercap` (Linux-only, guarded by `exists()`); Pearl
   mining on Windows is unsupported; macOS mining uses the separate

@@ -325,7 +325,7 @@ mod tests {
         let hw = HardwareInfo {
             gpu: Some(GpuInfo {
                 vendor: "amd".into(),
-                name: "AMD Instinct MI250".into(),
+                name: "AMD MI250".into(),
                 vram_gb: 64.0,
                 count: 1,
                 ..GpuInfo::default()

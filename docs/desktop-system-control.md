@@ -9,12 +9,12 @@ Desktop only. No Android / emulator work.
   hero, glass cards, approval step, appearance card),
   `frontend/src/components/Desktop/systemControlApi.ts`,
   `frontend/src/components/Desktop/desktopPhase6.css`.
-  Attractive by owner requirement (2026-10-16): clean modern visual
+  Attractive by design requirement: clean modern visual
   design, not default-looking.
 - **Backend:** `src/openjarvis/desktop/system_control.py` (action
   catalogue, validation, approval-gated dispatch, redacted results),
   `src/openjarvis/desktop/settings.py` (appearance-only settings,
-  owner-only persistence).
+  private persistence).
 - **REST:** `src/openjarvis/server/desktop_routes.py` — registered in
   `create_app`:
   - `GET /v1/desktop/system-control/actions`

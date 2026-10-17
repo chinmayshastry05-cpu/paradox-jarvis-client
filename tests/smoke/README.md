@@ -6,23 +6,23 @@ No live test has been run. Nothing here claims a live result.
 
 ## Files
 
-- `test_telegram_owner_bot.py` — Telegram owner-bot gateway round-trip.
+- `test_telegram_admin_bot.py` — Telegram admin-bot gateway round-trip.
 - `test_free_tts.py` — real free TTS synthesis (local Kokoro by default).
 
-## Telegram owner-bot smoke test
+## Telegram admin-bot smoke test
 
 ```sh
-TELEGRAM_BOT_TOKEN=... TELEGRAM_OWNER_CHAT_ID=... \
-    pytest tests/smoke/test_telegram_owner_bot.py -m live_channel -v
+TELEGRAM_BOT_TOKEN=... TELEGRAM_ADMIN_CHAT_ID=... \
+    pytest tests/smoke/test_telegram_admin_bot.py -m live_channel -v
 ```
 
 Steps: `getMe` (proves the token) → direct `TelegramChannel.send` to the
-owner chat (proves Bot API delivery) → `TelegramGateway` round-trip with
+admin chat (proves Bot API delivery) → `TelegramGateway` round-trip with
 an echo agent (proves gateway routing + reply send). Send-only: `connect()`
 is never called, so it cannot 409 with a running bot instance.
 
 Credentials come ONLY from `TELEGRAM_BOT_TOKEN` /
-`TELEGRAM_OWNER_CHAT_ID` env vars. Missing → SKIP ("credentials not
+`TELEGRAM_ADMIN_CHAT_ID` env vars. Missing → SKIP ("credentials not
 provided"). Placeholder / malformed tokens → SKIP, never used to claim
 a live result. The token is never hardcoded, logged, or written to any
 file.

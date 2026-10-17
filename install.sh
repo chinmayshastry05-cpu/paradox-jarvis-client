@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# install.sh — paradox-jarvis-ultra one-line installer (Linux).
+# install.sh — paradox-jarvis-client one-line installer (Linux).
 #
 # The repo is public, so no token is needed:
 #
-#   curl -fsSL https://raw.githubusercontent.com/chinmayshastry05-cpu/paradox-jarvis-ultra/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/chinmayshastry05-cpu/paradox-jarvis-client/main/install.sh | bash
 #
 # What it does: clone the repo, set up uv + Python venv,
 # install deps, install Ollama and pull a starter model, then launch
@@ -35,7 +35,7 @@ for arg in "$@"; do
 done
 
 OPENJARVIS_HOME="${OPENJARVIS_HOME:-$HOME/.openjarvis}"
-OPENJARVIS_REPO_URL="${OPENJARVIS_REPO_URL:-https://github.com/chinmayshastry05-cpu/paradox-jarvis-ultra.git}"
+OPENJARVIS_REPO_URL="${OPENJARVIS_REPO_URL:-https://github.com/chinmayshastry05-cpu/paradox-jarvis-client.git}"
 STARTER_MODEL="${JARVIS_STARTER_MODEL:-qwen3:0.6b}"
 SRC_DIR="$OPENJARVIS_HOME/src"
 VENV_DIR="$SRC_DIR/.venv"
@@ -128,7 +128,7 @@ fi
 
 cat <<EOF
 
-paradox-jarvis-ultra installed.
+Paradox Jarvis (client edition) installed.
   repo:   $SRC_DIR
   venv:   $VENV_DIR
   config: $OPENJARVIS_HOME/config.toml

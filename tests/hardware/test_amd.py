@@ -28,7 +28,7 @@ class TestAMDDetection:
     @patch(
         "openjarvis.core.config._run_cmd",
         side_effect=[
-            "AMD Instinct MI300X",  # --showproductname
+            "AMD MI300X",  # --showproductname
             "GPU[0] : vram Total Memory (B): 206158430208",  # --showmeminfo vram
             "GPU[0] : Some info",  # --showallinfo
         ],
@@ -47,7 +47,7 @@ class TestAMDDetection:
     @patch(
         "openjarvis.core.config._run_cmd",
         side_effect=[
-            "AMD Instinct MI250X\nAMD Instinct MI250X",  # --showproductname
+            "AMD MI250X\nAMD MI250X",  # --showproductname
             "",  # --showmeminfo vram (empty)
             "",  # --showallinfo (empty)
         ],
@@ -68,7 +68,7 @@ class TestAMDDetection:
     @patch(
         "openjarvis.core.config._run_cmd",
         side_effect=[
-            "AMD Instinct MI300X",
+            "AMD MI300X",
             "GPU[0] : vram Total Memory (B): 206158430208",
             "GPU[0] : Some info",
         ],
@@ -84,7 +84,7 @@ class TestAMDDetection:
     @patch(
         "openjarvis.core.config._run_cmd",
         side_effect=[
-            "AMD Instinct MI300X",
+            "AMD MI300X",
             (
                 "GPU[0] : vram Total Memory (B): 206158430208\n"
                 "GPU[0] : vram Total Used Memory (B): 0\n"
@@ -113,7 +113,7 @@ class TestAMDDetection:
     @patch(
         "openjarvis.core.config._run_cmd",
         side_effect=[
-            "AMD Instinct MI300X",
+            "AMD MI300X",
             "garbled output with no valid memory info",
             "GPU[0] : Some info",
         ],
@@ -141,7 +141,7 @@ class TestAMDEngineRecommendation:
             ram_gb=768.0,
             gpu=GpuInfo(
                 vendor="amd",
-                name="AMD Instinct MI300X",
+                name="AMD MI300X",
                 vram_gb=192.0,
                 count=1,
             ),
@@ -156,7 +156,7 @@ class TestAMDEngineRecommendation:
             ram_gb=768.0,
             gpu=GpuInfo(
                 vendor="amd",
-                name="AMD Instinct MI350X",
+                name="AMD MI350X",
                 vram_gb=288.0,
                 count=1,
             ),
@@ -196,7 +196,7 @@ class TestAMDEngineRecommendation:
             ram_gb=1024.0,
             gpu=GpuInfo(
                 vendor="amd",
-                name="AMD Instinct MI300X",
+                name="AMD MI300X",
                 vram_gb=192.0,
                 count=4,
             ),

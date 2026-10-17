@@ -21,7 +21,7 @@ from openjarvis.core.events import EventBus, EventType
 from openjarvis.security.confirmation import ConfirmationGate
 
 SECRET = "sk-abcdefghij1234567890ABCDEFGH"
-OWNER_CHAT = "111"
+ADMIN_CHAT = "111"
 OTHER_CHAT = "999"
 
 
@@ -67,7 +67,7 @@ class FakeAgent:
 
 
 def _msg(
-    content: str, chat_id: str = OWNER_CHAT, message_id: str = "7"
+    content: str, chat_id: str = ADMIN_CHAT, message_id: str = "7"
 ) -> ChannelMessage:
     return ChannelMessage(
         channel="telegram",
@@ -79,7 +79,7 @@ def _msg(
 
 
 def _gateway(**kwargs):
-    channel = kwargs.pop("channel", FakeChannel(allowed_chat_ids=OWNER_CHAT))
+    channel = kwargs.pop("channel", FakeChannel(allowed_chat_ids=ADMIN_CHAT))
     agent = kwargs.pop("agent", FakeAgent())
     gate = kwargs.pop("gate", ConfirmationGate())
     gw = TelegramGateway(channel, agent, confirmation_gate=gate, **kwargs)
@@ -97,7 +97,7 @@ class TestRouting:
         assert reply == "hello back"
         assert agent.seen == ["ping"]
         assert len(channel.sent) == 1
-        assert channel.sent[0]["channel"] == OWNER_CHAT
+        assert channel.sent[0]["channel"] == ADMIN_CHAT
         assert channel.sent[0]["content"] == "hello back"
         # Reply reference is the inbound message id, not the chat id.
         assert channel.sent[0]["conversation_id"] == "7"
@@ -190,7 +190,7 @@ class TestRedaction:
         gw, channel, _, _ = _gateway()
         try:
             gw.request_confirmation(
-                "send_email", {"to": "a@b.c", "api_key": f'"{SECRET}"'}, OWNER_CHAT
+                "send_email", {"to": "a@b.c", "api_key": f'"{SECRET}"'}, ADMIN_CHAT
             )
         finally:
             gw.shutdown()
@@ -206,7 +206,7 @@ class TestRedaction:
         mock_response = MagicMock()
         mock_response.status_code = 200
         with patch("httpx.post", return_value=mock_response) as mock_post:
-            assert ch.send(OWNER_CHAT, f"leak {SECRET}") is True
+            assert ch.send(ADMIN_CHAT, f"leak {SECRET}") is True
         payload = mock_post.call_args[1]["json"]
         assert SECRET not in payload["text"]
         assert "REDACTED" in payload["text"]
@@ -221,7 +221,7 @@ class TestConfirmationGateFlow:
         gw, channel, _, gate = _gateway()
         try:
             req_id = gw.request_confirmation(
-                "file_write", {"path": "/tmp/x", "content": "hi"}, OWNER_CHAT
+                "file_write", {"path": "/tmp/x", "content": "hi"}, ADMIN_CHAT
             )
             assert req_id
             assert len(channel.sent) == 1  # the prompt
@@ -244,7 +244,7 @@ class TestConfirmationGateFlow:
         gw, channel, _, gate = _gateway()
         try:
             req_id = gw.request_confirmation(
-                "file_write", {"path": "/tmp/x", "content": "hi"}, OWNER_CHAT
+                "file_write", {"path": "/tmp/x", "content": "hi"}, ADMIN_CHAT
             )
             gw.handle_message(_msg(f"YES {req_id}"))
             # Tampered arguments must not match the granted approval.
@@ -261,7 +261,7 @@ class TestConfirmationGateFlow:
     def test_second_yes_grants_nothing(self):
         gw, channel, _, gate = _gateway()
         try:
-            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             gw.handle_message(_msg(f"YES {req_id}"))
             assert gate.consume_matching("shell", {"cmd": "ls"}) is True
             # Replay: pending is gone, so this falls through to the agent
@@ -274,7 +274,7 @@ class TestConfirmationGateFlow:
     def test_no_denies_and_grants_nothing(self):
         gw, channel, _, gate = _gateway()
         try:
-            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             reply = gw.handle_message(_msg(f"NO {req_id}"))
             assert "Denied" in reply
             assert gate.consume_matching("shell", {"cmd": "ls"}) is False
@@ -284,13 +284,13 @@ class TestConfirmationGateFlow:
     def test_yes_from_other_chat_grants_nothing(self):
         gw, channel, _, gate = _gateway()
         try:
-            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             # Other chat's YES must not approve: it falls through to the
             # agent (which is allowlist-dropped), and the pending stays.
             gw.handle_message(_msg(f"YES {req_id}", chat_id=OTHER_CHAT))
             assert gate.consume_matching("shell", {"cmd": "ls"}) is False
             assert len(gw.list_pending()) == 1
-            # The owner's YES still works afterwards.
+            # The admin's YES still works afterwards.
             gw.handle_message(_msg(f"YES {req_id}"))
             assert gate.consume_matching("shell", {"cmd": "ls"}) is True
         finally:
@@ -310,7 +310,7 @@ class TestConfirmationGateFlow:
     def test_expired_pending_yes_grants_nothing(self):
         gw, channel, _, gate = _gateway(confirmation_ttl_seconds=0.05)
         try:
-            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             time.sleep(0.1)
             gw.handle_message(_msg(f"YES {req_id}"))
             assert gate.consume_matching("shell", {"cmd": "ls"}) is False
@@ -322,7 +322,7 @@ class TestConfirmationGateFlow:
         executable: consume_matching finds nothing until YES."""
         gw, channel, _, gate = _gateway()
         try:
-            gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+            gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             assert gate.consume_matching("shell", {"cmd": "ls"}) is False
         finally:
             gw.shutdown()
@@ -330,7 +330,7 @@ class TestConfirmationGateFlow:
     def test_gate_token_never_sent_over_telegram(self):
         gw, channel, _, gate = _gateway()
         try:
-            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+            req_id = gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             gw.handle_message(_msg(f"YES {req_id}"))
             tokens = list(gate._approvals.keys())
             assert tokens  # a grant really exists server-side
@@ -347,7 +347,7 @@ class TestConfirmationGateFlow:
         gw = TelegramGateway(channel, FakeAgent(), confirmation_gate=gate)
         try:
             with pytest.raises(ValueError, match="non-empty allowed_chat_ids"):
-                gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+                gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             # And a YES-shaped message can never grant without a pending.
             gw.handle_message(_msg("YES abc123"))
             assert gate.consume_matching("shell", {"cmd": "ls"}) is False
@@ -357,19 +357,19 @@ class TestConfirmationGateFlow:
     def test_request_for_non_allowlisted_chat_refused(self):
         gw, channel, _, gate = _gateway()
         try:
-            with pytest.raises(ValueError, match="not in the owner allowlist"):
+            with pytest.raises(ValueError, match="not in the admin allowlist"):
                 gw.request_confirmation("shell", {"cmd": "ls"}, OTHER_CHAT)
             assert gw.list_pending() == []
         finally:
             gw.shutdown()
 
     def test_undelivered_prompt_leaves_no_pending(self):
-        channel = FakeChannel(allowed_chat_ids=OWNER_CHAT)
+        channel = FakeChannel(allowed_chat_ids=ADMIN_CHAT)
         channel.send = lambda *a, **k: False
         gw = TelegramGateway(channel, FakeAgent(), confirmation_gate=ConfirmationGate())
         try:
             with pytest.raises(RuntimeError, match="could not be delivered"):
-                gw.request_confirmation("shell", {"cmd": "ls"}, OWNER_CHAT)
+                gw.request_confirmation("shell", {"cmd": "ls"}, ADMIN_CHAT)
             assert gw.list_pending() == []
         finally:
             gw.shutdown()
@@ -378,7 +378,7 @@ class TestConfirmationGateFlow:
         gw, channel, _, _ = _gateway()
         try:
             gw.request_confirmation(
-                "shell", {"cmd": "rm -rf /", "secret": SECRET}, OWNER_CHAT
+                "shell", {"cmd": "rm -rf /", "secret": SECRET}, ADMIN_CHAT
             )
             pending = gw.list_pending()
             assert len(pending) == 1
@@ -422,8 +422,8 @@ class TestConfirmationGateFlow:
                 ToolCall(id="1", name="confirm_tool", arguments='{"x": 1}')
             )
             assert denied.success is False
-            # Owner approves exactly these arguments via Telegram.
-            req_id = gw.request_confirmation("confirm_tool", {"x": 1}, OWNER_CHAT)
+            # Admin approves exactly these arguments via Telegram.
+            req_id = gw.request_confirmation("confirm_tool", {"x": 1}, ADMIN_CHAT)
             gw.handle_message(_msg(f"YES {req_id}"))
             # Now the executor consumes the Telegram-granted approval.
             ok = executor.execute(

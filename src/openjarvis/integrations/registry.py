@@ -1,7 +1,7 @@
-"""License / integration registry for Paradox Jarvis Ultra (Phase 2).
+"""License / integration registry for Paradox Jarvis (client edition).
 
-Data mirror of ``docs/paradox-jarvis-ultra-matrix.md`` §1: every candidate
-repo, its *verified* licence, and how it may integrate. The rule is uniform:
+Candidate repos, their *verified* licences, and how they may integrate.
+The rule is uniform:
 
 **nothing is copied into the fork.** Permissive licences (MIT/Apache-2.0)
 are integrated via resolver / external process / MCP stdio only; AGPL,
@@ -57,16 +57,16 @@ REGISTRY: Dict[str, IntegrationDescriptor] = {
         "https://github.com/open-jarvis/openjarvis",
         "Apache-2.0",
         "base",
-        "Fork base; keep LICENSE + attribution + history.",
+        "Fork base; keep LICENSE + attribution.",
         "n/a: base of the fork",
     ),
-    "paradox-jarvis-ultra": IntegrationDescriptor(
-        "paradox-jarvis-ultra",
-        "https://github.com/chinmayshastry05-cpu/paradox-jarvis-ultra",
+    "paradox-jarvis-client": IntegrationDescriptor(
+        "paradox-jarvis-client",
+        "https://github.com/chinmayshastry05-cpu/paradox-jarvis-client",
         "Apache-2.0 (inherited)",
         "base",
-        "Private personal fork. Do not strip upstream attribution.",
-        "n/a: this fork",
+        "Client edition. Do not strip upstream attribution.",
+        "n/a: this product",
     ),
     "cactus": IntegrationDescriptor(
         "cactus",
@@ -194,7 +194,7 @@ REGISTRY: Dict[str, IntegrationDescriptor] = {
         "AGPL-3.0",
         "blocked-agpl",
         "None until an explicit licensing decision. Do NOT copy or link "
-        "into the Apache-2.0 fork.",
+        "into the Apache-2.0 product.",
         "blocked: AGPL-3.0 — no copying/linking without a licensing decision",
     ),
     "open-generative-ai": IntegrationDescriptor(
@@ -232,46 +232,6 @@ REGISTRY: Dict[str, IntegrationDescriptor] = {
         "External MCP stdio server (bridge_server_entry). Never imported "
         "in-process. Keep MIT notice.",
         "avoid: external MCP stdio, never imported in-process",
-    ),
-    "studyreels": IntegrationDescriptor(
-        "studyreels",
-        "https://github.com/chinmayshastry05-cpu/studyreels",
-        "UNVERIFIED — no license detected",
-        "separate",
-        "None. Separate, unlicensed project. Do NOT copy.",
-        "blocked: separate project, licence unverified",
-    ),
-    "tally-llm": IntegrationDescriptor(
-        "tally-llm",
-        "https://github.com/chinmayshastry05-cpu/tally-llm",
-        "UNVERIFIED — no license detected",
-        "separate",
-        "None. Separate research prototype. Tally work stays separate.",
-        "blocked: separate project, licence unverified",
-    ),
-    "clientops-ai-demo": IntegrationDescriptor(
-        "clientops-ai-demo",
-        "https://github.com/chinmayshastry05-cpu/clientops-ai-demo",
-        "UNVERIFIED — no license detected",
-        "separate",
-        "None. Separate triage-assistant demo. Do NOT copy.",
-        "blocked: separate project, licence unverified",
-    ),
-    "risklabs": IntegrationDescriptor(
-        "risklabs",
-        "https://github.com/chinmayshastry05-cpu/risklabs",
-        "UNVERIFIED — no license detected",
-        "separate",
-        "None. Separate college academic project. Do NOT copy.",
-        "blocked: separate project, licence unverified",
-    ),
-    "first-role-radar": IntegrationDescriptor(
-        "first-role-radar",
-        "https://github.com/ChinmaysTG/first-role-radar",
-        "UNVERIFIED — no license detected",
-        "separate",
-        "None. Separate job-research tool (SerpApi, key-gated).",
-        "blocked: separate project, licence unverified",
     ),
     "openclaw-skills": IntegrationDescriptor(
         "openclaw-skills",

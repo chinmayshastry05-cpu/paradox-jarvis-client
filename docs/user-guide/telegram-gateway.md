@@ -1,6 +1,6 @@
 # Telegram gateway (Phase 4)
 
-Owner-only Telegram access via the Bot API (free). No MTProto / userbot
+Admin-only Telegram access via the Bot API (free). No MTProto / userbot
 exists and none is planned — that is BLOCKED.
 
 ## Components
@@ -23,8 +23,8 @@ default_channel = "telegram"
 # Token from the TELEGRAM_BOT_TOKEN environment variable (or this key).
 # NEVER commit a real token, NEVER send one over mail/chat/Telegram.
 bot_token = ""
-# Owner-only: the chat id(s) allowed to talk to the bot AND to approve.
-# An empty allowlist is NOT owner-only: normal chat still flows through
+# Admin-only: the chat id(s) allowed to talk to the bot AND to approve.
+# An empty allowlist is NOT admin-only: normal chat still flows through
 # the channel, but confirmations are refused entirely.
 allowed_chat_ids = "111"
 ```
@@ -74,11 +74,11 @@ gateway or the channel.
 
 1. Trusted operator code (never a Telegram user) calls
    `gateway.request_confirmation(tool_name, arguments, chat_id)`. This
-   registers a **pending request, not an approval**, and sends the owner
+   registers a **pending request, not an approval**, and sends the admin
    a prompt with **redacted** arguments:
    `Reply "YES <id>" to approve this exact action once, or "NO <id>" to deny.`
    If the prompt cannot be delivered, no pending request is left behind.
-2. Owner replies `YES <id>` from the same chat. The gateway calls
+2. Admin replies `YES <id>` from the same chat. The gateway calls
    `gate.grant(tool, exact-arguments)` — the approval now lives in the
    central gate until the `ToolExecutor` consumes it exactly once via
    `consume_matching` for that exact tool + arguments, or it expires.

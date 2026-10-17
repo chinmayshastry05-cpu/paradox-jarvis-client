@@ -174,7 +174,7 @@ def nvidia_multi_gpu() -> GpuInfo:
 @pytest.fixture
 def amd_gpu() -> GpuInfo:
     """AMD MI300X GPU fixture."""
-    return GpuInfo(vendor="amd", name="AMD Instinct MI300X", vram_gb=192.0, count=1)
+    return GpuInfo(vendor="amd", name="AMD MI300X", vram_gb=192.0, count=1)
 
 
 @pytest.fixture

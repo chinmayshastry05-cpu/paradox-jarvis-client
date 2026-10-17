@@ -463,7 +463,7 @@ mod tests {
                 ("mobile_context".into(), json!({"origin": "Chicago"})),
                 (
                     "photo_interests".into(),
-                    json!({"interests": ["museums", "gardens"]}),
+                    json!({"interests": ["galleries", "gardens"]}),
                 ),
             ]),
             timeout_ms: 1000,
@@ -481,7 +481,7 @@ mod tests {
         assert_eq!(plan["origin"], "Chicago");
         assert_eq!(
             plan["itinerary"][1]["activity"],
-            "Explore museums in Montreal"
+            "Explore galleries in Montreal"
         );
         assert_eq!(plan["itinerary"][0]["date"], "2027-01-01");
     }

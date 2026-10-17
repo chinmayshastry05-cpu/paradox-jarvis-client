@@ -1,4 +1,4 @@
-"""Live smoke test: Telegram owner-bot gateway round-trip.
+"""Live smoke test: Telegram admin-bot gateway round-trip.
 
 STATUS: BLOCKED — awaiting real credentials via a secure channel.
 Credentials are provided via environment variables only and are never committed.
@@ -6,33 +6,33 @@ Credentials are provided via environment variables only and are never committed.
 What this test does (only when credentials are present):
 1. ``getMe`` against the Telegram Bot API — proves the bot token is
    valid without sending anything.
-2. A direct ``TelegramChannel.send`` to the owner chat — proves Bot API
-   delivery to the owner.
+2. A direct ``TelegramChannel.send`` to the admin chat — proves Bot API
+   delivery to the admin.
 3. A ``TelegramGateway`` round-trip: a synthetic inbound message from
-   the owner chat is routed through the real gateway to an echo agent,
+   the admin chat is routed through the real gateway to an echo agent,
    and the echo reply is sent back out through the same real channel
-   (the owner sees both messages in their Telegram client).
+   (the admin sees both messages in their Telegram client).
 
 What it does NOT do:
 - No long polling (``connect()`` is never called), so it cannot 409
   with a running bot instance.
 - No human reply is required; the "round-trip" is gateway -> Bot API
-  send, observed by the owner in Telegram.
+  send, observed by the admin in Telegram.
 - No fake/dummy credentials: placeholder or malformed tokens SKIP,
   they are never used to claim a live result.
 
 Credentials:
 - ``TELEGRAM_BOT_TOKEN`` — bot token, env var only. Never hardcoded,
   never logged, never in any file.
-- ``TELEGRAM_OWNER_CHAT_ID`` — owner chat id (also the allowlist).
+- ``TELEGRAM_ADMIN_CHAT_ID`` — admin chat id (also the allowlist).
 
 If either is absent, the test SKIPs with "credentials not provided"
 (fail-closed, never a confusing failure).
 
 Run (only with real credentials from a secure channel)::
 
-    TELEGRAM_BOT_TOKEN=... TELEGRAM_OWNER_CHAT_ID=... \\
-        pytest tests/smoke/test_telegram_owner_bot.py -m live_channel -v
+    TELEGRAM_BOT_TOKEN=... TELEGRAM_ADMIN_CHAT_ID=... \\
+        pytest tests/smoke/test_telegram_admin_bot.py -m live_channel -v
 """
 
 from __future__ import annotations
@@ -76,15 +76,15 @@ def _assert_get_me(token: str) -> None:
 
 @pytest.mark.live_channel
 @pytest.mark.live
-def test_owner_bot_gateway_round_trip() -> None:
+def test_admin_bot_gateway_round_trip() -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    owner_chat_id = os.environ.get("TELEGRAM_OWNER_CHAT_ID", "")
-    if not token or not owner_chat_id:
+    admin_chat_id = os.environ.get("TELEGRAM_ADMIN_CHAT_ID", "")
+    if not token or not admin_chat_id:
         pytest.skip(
             "credentials not provided: set TELEGRAM_BOT_TOKEN and "
-            "TELEGRAM_OWNER_CHAT_ID via a secure channel"
+            "TELEGRAM_ADMIN_CHAT_ID via a secure channel"
         )
-    if _looks_like_placeholder(token) or _looks_like_placeholder(owner_chat_id):
+    if _looks_like_placeholder(token) or _looks_like_placeholder(admin_chat_id):
         pytest.skip("placeholder credentials detected — not a live test, skipping")
     if ":" not in token:
         pytest.skip("TELEGRAM_BOT_TOKEN is malformed (no ':' separator)")
@@ -92,24 +92,24 @@ def test_owner_bot_gateway_round_trip() -> None:
     _assert_get_me(token)
 
     # Send-only: connect() is never called, so no long-polling conflict.
-    channel = TelegramChannel(bot_token=token, allowed_chat_ids=owner_chat_id)
+    channel = TelegramChannel(bot_token=token, allowed_chat_ids=admin_chat_id)
     probe = f"Jarvis smoke probe {uuid.uuid4().hex[:8]}"
-    assert channel.send(owner_chat_id, probe) is True, (
-        "direct send to owner chat failed"
+    assert channel.send(admin_chat_id, probe) is True, (
+        "direct send to admin chat failed"
     )
 
     gateway = TelegramGateway(
         channel,
         lambda text: f"smoke echo {text}",
-        allowed_chat_ids=owner_chat_id,
+        allowed_chat_ids=admin_chat_id,
     )
     try:
         inbound = ChannelMessage(
             channel="telegram",
-            sender=owner_chat_id,
+            sender=admin_chat_id,
             content=probe,
             message_id="",  # empty => no reply_to_message_id on the send
-            conversation_id=owner_chat_id,
+            conversation_id=admin_chat_id,
         )
         reply = gateway.handle_message(inbound)
     finally:

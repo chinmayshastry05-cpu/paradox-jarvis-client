@@ -258,7 +258,7 @@ def load_tokens(path: str) -> Optional[Dict[str, Any]]:
 
 
 def save_tokens(path: str, tokens: Dict[str, Any]) -> None:
-    """Persist *tokens* to *path* as JSON with owner-only (0o600) permissions.
+    """Persist *tokens* to *path* as JSON with user-only (0o600) permissions.
 
     Creates parent directories as needed.
     """

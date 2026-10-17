@@ -44,7 +44,7 @@ def secure_write_text(
     mode: int = 0o600,
     encoding: str = "utf-8",
 ) -> Path:
-    """Atomically replace *path* with owner-only text content.
+    """Atomically replace *path* with user-only text content.
 
     The temporary file is created in the destination directory so
     :func:`os.replace` remains atomic. Permissions are restricted before
