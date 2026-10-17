@@ -43,18 +43,13 @@ updates:
           - "minor"
           - "patch"
 
-  - package-ecosystem: "uv"
-    directory: "/"
-    open-pull-requests-limit: 2
-    schedule:
-      interval: "weekly"
-    groups:
-      python-minor-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
+  # NOTE: no `uv` (Python) ecosystem here on purpose. Dependabot's uv updater
+  # fails on genuine upstream extra conflicts in this project's own pins
+  # (vllm torch==2.13 vs memory-colbert torch==2.14, vllm fastapi<0.137 vs
+  # pinned fastapi==0.143, onnxruntime has no cp310 wheel, litellm openai<3
+  # vs pinned openai==3.31) and retries the same failure weekly. Fixing those
+  # means changing dependency pins — a separate task. Python deps are still
+  # covered by CI (uv sync on the lockfile); Dependabot just doesn't retry them.
 
   - package-ecosystem: "github-actions"
     directory: "/"
