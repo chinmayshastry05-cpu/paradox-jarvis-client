@@ -1,0 +1,11 @@
+  ___                       _                  _     
+ / _ \ _ __   ___ _ __     | | __ _ _ ____   _(_)___ 
+| | | | '_ \ / _ \ '_ \ _  | |/ _` | '__\ \ / / / __|
+| |_| | |_) |  __/ | | | |_| | (_| | |   \ V /| \__ \
+ \___/| .__/ \___|_| |_|\___/ \__,_|_|    \_/ |_|___/
+      |_|                                            
+      Personal AI, On Personal Devices
+
+WARNING openjarvis.security: Failed to set up rate limiter: No module named 'openjarvis_rust'
+4
+ASK_EXIT:0
