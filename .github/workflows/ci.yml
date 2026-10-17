@@ -1,0 +1,34 @@
+# CI mirrors `make test` / `make lint` in the Makefile:
+# install deps, build the Rust extension, lint, then pytest.
+# Non-live lane only: live / cloud / hub tests need real engines,
+# API keys, or Hub downloads and never run here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v4
+      - name: Install dependencies
+        run: uv sync --extra dev --extra framework-comparison --extra server
+      - name: Build Rust extension
+        run: uv run maturin develop --manifest-path rust/crates/openjarvis-python/Cargo.toml
+      - name: Lint
+        run: |
+          uv run ruff check src/ tests/
+          uv run ruff format --check src/ tests/
+      - name: Test
+        run: uv run pytest tests/ -n auto -q --tb=short -m "not live and not cloud and not hub"
