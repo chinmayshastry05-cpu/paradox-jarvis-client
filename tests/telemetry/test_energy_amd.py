@@ -28,9 +28,7 @@ def _make_fake_amdsmi(device_count: int = 1):
     mod.amdsmi_shut_down = MagicMock()
     handles = [f"amd-handle-{i}" for i in range(device_count)]
     mod.amdsmi_get_processor_handles = MagicMock(return_value=handles)
-    mod.amdsmi_get_gpu_asic_info = MagicMock(
-        return_value={"market_name": "AMD MI300X"}
-    )
+    mod.amdsmi_get_gpu_asic_info = MagicMock(return_value={"market_name": "AMD MI300X"})
     mod.amdsmi_get_energy_count = MagicMock(
         return_value={"energy_accumulator": 1000.0, "counter_resolution": 15.3}
     )
