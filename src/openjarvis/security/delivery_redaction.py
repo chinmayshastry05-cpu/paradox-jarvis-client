@@ -1,0 +1,553 @@
+"""Fail-closed redaction for anything delivered to a client.
+
+Every streaming / SSE / WebSocket / CLI delivery path must pass outgoing
+text and structured payloads through here *before* emission. The previous
+behaviour in ``server/stream_bridge.py`` returned text unchanged when the
+scanner could not be imported — fail-open — so a scanner outage leaked
+whatever the payload contained.
+
+Fail-closed ladder in :func:`redact_text`:
+
+1. Rust ``SecretScanner`` (same patterns as the engine guardrails).
+2. Pure-Python regex fallback using patterns that mirror
+   ``SecretScanner.PATTERNS`` / the Rust ``SECRET_PATTERNS`` (kept in this
+   module so the fallback still works when ``scanner.py`` itself fails to
+   import). Tests assert the fallback redacts the same sample secrets as
+   the Rust scanner, so drift between the two lists is caught.
+3. If both fail, the whole payload is replaced by a blocked placeholder —
+   never returned raw.
+
+:func:`redact_value` applies the same rule recursively to structured
+payloads (tool-call arguments, tool results, named SSE event data).
+Values that cannot be scanned (arbitrary objects, undecodable bytes,
+cycles, over-deep nesting) are replaced by a placeholder instead of being
+stringified — ``repr``/``str`` of an arbitrary object can itself contain
+a secret.
+
+Split secrets: :class:`StreamingRedactor` buffers token streams and
+holds back a tail, so a secret split across tokens of *one* logical
+payload is recognised before any of its bytes are emitted. Callers that
+already hold a whole payload (final agent content, one discrete SSE
+event, one tool result) must use :func:`redact_text` /
+:func:`redact_value` on the whole payload, not the streaming redactor.
+
+Cross-event splits: :func:`redact_sse_stream` wraps an SSE generator
+and redacts every frame before emission. Plain-text (non-JSON) data
+payloads go through ONE shared :class:`StreamingRedactor`, so a secret
+split across two plain-text frames of one stream IS caught (the
+redactor holds the suspicious suffix across the frame boundary).
+JSON data payloads are redacted whole-payload per frame
+(:func:`redact_value`), because the JSON framing (quotes, braces,
+``"}{"``) breaks the secret pattern across the frame boundary — see
+the hard boundary below.
+
+Boundary (cannot be fixed at this layer, documented so callers do not
+assume otherwise):
+
+* Segments already emitted cannot be retracted. The redactor holds
+  back only a trailing suffix that could grow into a secret (a
+  complete match at the buffer end, a partial-pattern match, or a
+  literal pattern prefix), so a secret split across tokens of one
+  payload is caught however long it is, while clean tokens still
+  stream immediately. The residual limit: a secret whose pattern is
+  not in the scanner's list cannot be recognised at all — same as
+  whole-payload redaction.
+* A secret deliberately split across two *discrete JSON* SSE events,
+  with neither half matching a pattern on its own, is NOT
+  reconstructed: the JSON framing breaks the pattern (e.g. frame 1
+  ends ``{"text": "password"}`` and frame 2 starts
+  ``{"text": "= \\"secret\\""}`` — neither JSON payload matches, and
+  the client concatenating the text fields reconstructs the secret).
+  This is a HARD boundary of frame-level redaction. The mitigation is
+  that each frame is redacted whole-payload, so a secret fully inside
+  one frame is always caught, and the first half is redacted whenever
+  it matches on its own (a bare literal alone is not a secret). Callers
+  must not split one logical payload across discrete JSON events.
+  ``tests/security/test_cross_event_split.py::test_cross_event_json_split_is_a_documented_boundary``
+  proves the boundary.
+* Error paths must never embed exception text: use
+  :func:`safe_error_message`. The full exception stays in server logs.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import asdict, is_dataclass
+from typing import Any, AsyncIterator
+
+__all__ = [
+    "BLOCKED_PLACEHOLDER",
+    "StreamingRedactor",
+    "redact_sse_stream",
+    "redact_text",
+    "redact_value",
+    "safe_error_message",
+]
+
+BLOCKED_PLACEHOLDER = "[REDACTED: delivery blocked — secret scanner unavailable]"
+_UNSCANNABLE_PLACEHOLDER = "[REDACTED: unscannable value]"
+_MAX_DEPTH = 20
+
+# Pure-Python fallback patterns. Must mirror SecretScanner.PATTERNS in
+# openjarvis/security/scanner.py and SECRET_PATTERNS in
+# rust/crates/openjarvis-security/src/scanner.rs (same names, same regexes).
+_FALLBACK_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("openai_key", r"sk-[A-Za-z0-9_-]{20,}"),
+    ("anthropic_key", r"sk-ant-[A-Za-z0-9_-]{20,}"),
+    ("aws_access_key", r"AKIA[0-9A-Z]{16}"),
+    ("github_token", r"(?:ghp|gho|ghs|ghr|github_pat)_[A-Za-z0-9_]{36,}"),
+    (
+        "password_assignment",
+        r"""(?:password|passwd|pwd)\s*[=:]\s*['"]([^'"]{4,})['"]""",
+    ),
+    ("db_connection_string", r"(?:postgres|mysql|mongodb|redis)://[^\s]{10,}"),
+    ("private_key", r"-----BEGIN (?:RSA )?PRIVATE KEY-----"),
+    ("slack_token", r"xox[bpors]-[A-Za-z0-9\-]{10,}"),
+    ("stripe_key", r"(?:sk|pk)_(?:test|live)_[A-Za-z0-9]{20,}"),
+    (
+        "generic_api_key",
+        r"""(?:api_key|secret_key|auth_token)\s*[=:]\s*['"]([^'"]{8,})['"]""",
+    ),
+)
+_FALLBACK_COMPILED: tuple[tuple[str, "re.Pattern[str]"], ...] = tuple(
+    (name, re.compile(pattern)) for name, pattern in _FALLBACK_PATTERNS
+)
+
+# Suffixes that may be the *start* of a secret whose remainder has not
+# arrived yet. Checked anchored at the end of an emitted prefix; a match
+# means that suffix is held back instead of emitted.
+_PARTIAL_PATTERNS: tuple[str, ...] = (
+    r"sk-[A-Za-z0-9_-]{0,19}$",
+    r"sk-ant-[A-Za-z0-9_-]{0,19}$",
+    r"AKIA[0-9A-Z]{0,15}$",
+    r"(?:ghp|gho|ghs|ghr|github_pat)_[A-Za-z0-9_]{0,35}$",
+    r"xox[bpors]-[A-Za-z0-9\-]{0,9}$",
+    r"(?:sk|pk)_(?:test|live)?_?[A-Za-z0-9]{0,19}$",
+    r"(?:password|passwd|pwd)\s*[=:]\s*['\"]?[^'\"]{0,}$",
+    r"(?:api_key|secret_key|auth_token)\s*[=:]\s*['\"]?[^'\"]{0,}$",
+    r"(?:postgres|mysql|mongodb|redis)://[^\s]{0,}$",
+    r"-----BEGIN (?:RSA )?PRIVATE KEY-----$",
+    r"-----BEGIN( ?$| (?:RSA)? ?$| (?:RSA )?PRIVATE( ?$| KEY( ?$|-{0,4}$)))",
+)
+_PARTIAL_COMPILED: tuple["re.Pattern[str]", ...] = tuple(
+    re.compile(p) for p in _PARTIAL_PATTERNS
+)
+
+
+def _redact_with_fallback(text: str) -> str:
+    result = text
+    for name, pattern in _FALLBACK_COMPILED:
+        result = pattern.sub(f"[REDACTED:{name}]", result)
+    return result
+
+
+def redact_text(text: str) -> str:
+    """Redact secrets from *text*, fail-closed.
+
+    Never returns raw text on scanner failure: falls back to the
+    pure-Python patterns, and if those fail too returns the blocked
+    placeholder.
+    """
+    if not isinstance(text, str):
+        return _UNSCANNABLE_PLACEHOLDER
+    try:
+        from openjarvis.security.scanner import SecretScanner
+
+        return SecretScanner().redact(text)
+    except Exception:
+        pass
+    try:
+        return _redact_with_fallback(text)
+    except Exception:
+        return BLOCKED_PLACEHOLDER
+
+
+def redact_value(
+    value: Any, _depth: int = 0, _seen: frozenset[int] | None = None
+) -> Any:
+    """Recursively redact secrets in a structured payload, fail-closed."""
+    try:
+        return _redact_value_inner(value, _depth, _seen or frozenset())
+    except Exception:
+        return BLOCKED_PLACEHOLDER
+
+
+def _redact_value_inner(value: Any, depth: int, seen: frozenset[int]) -> Any:
+    if depth > _MAX_DEPTH:
+        return _UNSCANNABLE_PLACEHOLDER
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            return redact_text(bytes(value).decode("utf-8"))
+        except Exception:
+            return _UNSCANNABLE_PLACEHOLDER
+    if isinstance(value, dict):
+        oid = id(value)
+        if oid in seen:
+            return _UNSCANNABLE_PLACEHOLDER
+        seen = seen | {oid}
+        out: dict[Any, Any] = {}
+        for key, item in value.items():
+            if isinstance(key, str):
+                new_key = redact_text(key)
+            else:
+                new_key = _UNSCANNABLE_PLACEHOLDER
+            out[new_key] = _redact_value_inner(item, depth + 1, seen)
+        return out
+    if isinstance(value, (list, tuple)):
+        oid = id(value)
+        if oid in seen:
+            return _UNSCANNABLE_PLACEHOLDER
+        seen = seen | {oid}
+        return [_redact_value_inner(item, depth + 1, seen) for item in value]
+    if isinstance(value, (set, frozenset)):
+        oid = id(value)
+        if oid in seen:
+            return _UNSCANNABLE_PLACEHOLDER
+        seen = seen | {oid}
+        return [_redact_value_inner(item, depth + 1, seen) for item in value]
+    # Pydantic models / dataclasses: redact their data, not their repr.
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        try:
+            return _redact_value_inner(model_dump(), depth + 1, seen)
+        except Exception:
+            return _UNSCANNABLE_PLACEHOLDER
+    if is_dataclass(value) and not isinstance(value, type):
+        try:
+            return _redact_value_inner(asdict(value), depth + 1, seen)
+        except Exception:
+            return _UNSCANNABLE_PLACEHOLDER
+    # Anything else could leak via __str__/__repr__ — do not stringify it.
+    return _UNSCANNABLE_PLACEHOLDER
+
+
+def safe_error_message(kind: str = "stream") -> str:
+    """Fixed client-facing error text carrying no exception content."""
+    messages = {
+        "stream": "An error occurred while streaming. See server logs for details.",
+        "chat": "Sorry, an error occurred. See server logs for details.",
+        "context_length": (
+            "The input is too long for the model's context window. "
+            "Please try a shorter message."
+        ),
+        "model": "The model returned an error. See server logs for details.",
+        "research": "Research failed. See server logs for details.",
+        "tool": "Tool execution failed. See server logs for details.",
+    }
+    return messages.get(kind, messages["stream"])
+
+
+# Literal prefixes of the secret patterns above. Every secret starts
+# with one of these, so any fragment that is a prefix of a secret is
+# either a prefix of one of these literals, a partial-pattern match, or
+# already a complete match. Used to hold back a suffix that could grow
+# into a secret on the next token.
+_LITERAL_PREFIXES: tuple[str, ...] = (
+    "sk-",
+    "sk-ant-",
+    "AKIA",
+    "ghp_",
+    "gho_",
+    "ghs_",
+    "ghr_",
+    "github_pat_",
+    "password",
+    "passwd",
+    "pwd",
+    "postgres://",
+    "mysql://",
+    "mongodb://",
+    "redis://",
+    "-----BEGIN ",
+    "-----BEGIN PRIVATE KEY-----",
+    "-----BEGIN RSA PRIVATE KEY-----",
+    "xoxb-",
+    "xoxp-",
+    "xoxo-",
+    "xoxr-",
+    "xoxs-",
+    "sk_live_",
+    "sk_test_",
+    "pk_live_",
+    "pk_test_",
+    "api_key",
+    "secret_key",
+    "auth_token",
+)
+_MAX_BUFFERED = 65536
+
+
+# Assignment-style literals whose secret is ``literal + sep + quoted value``.
+# Unlike token-style literals (``sk-``, ``AKIA``, ...), whitespace does
+# NOT break an assignment: the pattern allows ``\s*`` between the
+# literal and the separator. A buffer ending with one of these literals
+# (optionally followed by whitespace) must be held while streaming —
+# the next token may supply ``=`` / ``:`` and a value, completing a
+# secret. This hold is streaming-only; flush() emits a bare literal
+# raw (it is not a secret without a value).
+_ASSIGNMENT_LITERALS: tuple[str, ...] = (
+    "password",
+    "passwd",
+    "pwd",
+    "api_key",
+    "secret_key",
+    "auth_token",
+)
+
+
+def _suspicious_start(buffer: str, *, final: bool = False) -> int:
+    """Earliest index of a suffix of *buffer* that may become a secret.
+
+    Returns ``len(buffer)`` when no suffix is suspicious. A suffix is
+    suspicious when it is: a complete-pattern match ending exactly at
+    the end (extendable — only while streaming, ``final=False``), a
+    partial-pattern match ending at the end, or — while streaming — a
+    prefix (proper or complete) of a literal pattern prefix, or an
+    assignment literal followed only by whitespace. At ``final=True``
+    a literal-prefix-only suffix is emitted raw: it is not a usable
+    secret (a single char such as ``"s"``), while a strong partial
+    match is replaced by a marker by :meth:`StreamingRedactor.flush`.
+    """
+    end = len(buffer)
+    cut = end
+    if not final:
+        for _, pattern in _FALLBACK_COMPILED:
+            for match in pattern.finditer(buffer):
+                if match.end() == end and match.start() < cut:
+                    cut = match.start()
+    for pattern in _PARTIAL_COMPILED:
+        match = pattern.search(buffer)
+        if match and match.end() == end and match.start() < cut:
+            cut = match.start()
+    if not final:
+        # Include the complete literal (k == len(literal)): a buffer
+        # ending with exactly ``password`` must be held, because the
+        # next token may be ``= "secret"``. The old ``range(1, len)``
+        # excluded it, leaking the assignment across the split.
+        for literal in _LITERAL_PREFIXES:
+            for k in range(1, len(literal) + 1):
+                if buffer.endswith(literal[:k]) and end - k < cut:
+                    cut = end - k
+        # Assignment literal + trailing whitespace only (e.g. the
+        # buffer ends with ``password ``): the whitespace does not
+        # break the assignment, so the literal is still held.
+        stripped = buffer.rstrip(" \t\r\n")
+        for literal in _ASSIGNMENT_LITERALS:
+            if stripped.endswith(literal):
+                lit_start = len(stripped) - len(literal)
+                if lit_start < cut:
+                    cut = lit_start
+    return cut
+
+
+# Assignment patterns whose value is an unclosed quoted string running
+# to the end of the buffer. Used to pick the suppression terminator
+# after an overlong drop: a quoted value ends only at its closing
+# quote, so whitespace inside it must NOT end suppression.
+_UNCLOSED_DOUBLE_QUOTE = re.compile(
+    r"""(?:password|passwd|pwd|api_key|secret_key|auth_token)\s*[=:]\s*"[^"]*$"""
+)
+_UNCLOSED_SINGLE_QUOTE = re.compile(
+    r"""(?:password|passwd|pwd|api_key|secret_key|auth_token)\s*[=:]\s*'[^']*$"""
+)
+
+
+def _unclosed_assignment_quote(buffer: str) -> str | None:
+    """Quote char if *buffer* ends with an unclosed quoted assignment."""
+    if _UNCLOSED_DOUBLE_QUOTE.search(buffer):
+        return '"'
+    if _UNCLOSED_SINGLE_QUOTE.search(buffer):
+        return "'"
+    return None
+
+
+class StreamingRedactor:
+    """Buffer token streams so split secrets are redacted before emission.
+
+    :meth:`feed` emits the incoming text immediately *except* for a
+    trailing suffix that could grow into a secret on the next token
+    (see :func:`_suspicious_start`). Clean tokens therefore still
+    stream token-by-token; only a suspicious tail is held. A secret
+    split across tokens is recognised once its final token arrives,
+    before any of its bytes were emitted. :meth:`flush` redacts the
+    remainder, replacing a trailing strong partial-secret fragment
+    with a marker. See the module docstring for the boundary.
+
+    Overlong suppression: when an oversized suspicious suffix is
+    dropped (buffer over ``_MAX_BUFFERED``), the redactor stays in
+    suppression until a safe separator — the closing quote of an
+    unclosed quoted assignment value, or else the first whitespace /
+    quote — because the secret may continue in the next feed. The
+    continuation bytes are dropped, never emitted. Memory stays
+    bounded: suppressed bytes are never buffered.
+    """
+
+    def __init__(self, holdback: int = 1024) -> None:
+        # Retained for call-site compatibility; holding is suffix-driven,
+        # not length-driven. The value is unused beyond the cap below.
+        self._holdback = max(0, int(holdback))
+        self._buffer = ""
+        self._suppressing = False
+        self._suppress_quote: str | None = None
+
+    def _consume_suppressed(self, text: str) -> str:
+        """Drop suppressed continuation bytes until a safe separator.
+
+        Returns the text after the separator (``""`` if none found —
+        the whole feed is swallowed and suppression continues).
+        """
+        if self._suppress_quote is not None:
+            idx = text.find(self._suppress_quote)
+            if idx < 0:
+                return ""
+            self._suppressing = False
+            self._suppress_quote = None
+            return text[idx + 1 :]
+        for i, ch in enumerate(text):
+            if ch in " \t\r\n\"'":
+                self._suppressing = False
+                return text[i + 1 :]
+        return ""
+
+    def feed(self, text: str) -> str:
+        if not isinstance(text, str) or not text:
+            return ""
+        if self._suppressing:
+            text = self._consume_suppressed(text)
+            if not text:
+                return ""
+        self._buffer += text
+        if len(self._buffer) > _MAX_BUFFERED:
+            # Bounded fail-closed: never emit an unbounded suspicious
+            # suffix; drop it behind a marker instead of leaking it.
+            # Then stay in suppression: the dropped suffix may continue
+            # in the next feed, and without its prefix the continuation
+            # bytes match no pattern (they would otherwise emit raw).
+            cut = _suspicious_start(self._buffer)
+            buffered, self._buffer = self._buffer, ""
+            emit = redact_text(buffered[:cut])
+            if cut < len(buffered):
+                emit += "[REDACTED:overlong-partial-secret]"
+                self._suppressing = True
+                self._suppress_quote = _unclosed_assignment_quote(buffered[cut:])
+            return emit
+        cut = _suspicious_start(self._buffer)
+        if cut <= 0:
+            return ""
+        emit, self._buffer = self._buffer[:cut], self._buffer[cut:]
+        return redact_text(emit)
+
+    def flush(self) -> str:
+        # A suppressed tail is dropped: it is a potential secret
+        # continuation, never emitted.
+        self._suppressing = False
+        self._suppress_quote = None
+        remainder, self._buffer = self._buffer, ""
+        if not remainder:
+            return ""
+        cut = _suspicious_start(remainder, final=True)
+        out = redact_text(remainder[:cut])
+        if cut < len(remainder):
+            out += "[REDACTED:partial-secret]"
+        return out
+
+
+# ---------------------------------------------------------------------------
+# SSE stream wrapper (Phase 1: cross-event split)
+# ---------------------------------------------------------------------------
+
+
+def _redact_sse_frame(frame: str, redactor: StreamingRedactor) -> str:
+    """Redact one complete SSE frame, preserving its structure.
+
+    ``data:`` lines carry the payload; every other line (``event:``,
+    ``id:``, ``retry:``, comments) passes through unchanged. A data
+    payload that parses as JSON is redacted whole-payload via
+    :func:`redact_value` and re-serialised only if redaction changed
+    it (clean frames keep their exact bytes). A non-JSON payload goes
+    through the shared *redactor*, so a secret split across two
+    plain-text frames of one stream is caught. The ``[DONE]`` sentinel
+    passes through untouched.
+    """
+    lines = frame.split("\n")
+    out_lines: list[str] = []
+    for line in lines:
+        if not line.startswith("data:"):
+            out_lines.append(line)
+            continue
+        # SSE parsers strip exactly one leading space after "data:";
+        # strip it before redaction, or the framing space breaks
+        # patterns spanning a frame boundary (e.g. a key split across
+        # two frames would see "sk-AAA AAA" instead of "sk-AAAAAA").
+        payload = line[len("data:") :]
+        had_space = payload.startswith(" ")
+        if had_space:
+            payload = payload[1:]
+        prefix = "data: " if had_space else "data:"
+        stripped = payload.strip()
+        if stripped == "[DONE]":
+            out_lines.append(line)
+            continue
+        # JSON payload: whole-payload redaction.
+        try:
+            parsed = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            parsed = None
+        if parsed is not None:
+            redacted = redact_value(parsed)
+            if redacted == parsed:
+                out_lines.append(line)
+            else:
+                out_lines.append("data: " + json.dumps(redacted))
+            continue
+        # Plain-text payload: shared streaming redactor (cross-frame).
+        redacted_text = redactor.feed(payload)
+        if redacted_text:
+            out_lines.append(prefix + redacted_text)
+        # An empty feed means the whole payload was held back as a
+        # suspicious suffix; it is emitted with the next frame's feed
+        # or the stream-end flush, under the same event type.
+    return "\n".join(out_lines)
+
+
+async def redact_sse_stream(
+    chunks: AsyncIterator[str | bytes],
+) -> AsyncIterator[str]:
+    """Wrap an SSE generator so every frame is redacted before emission.
+
+    Chunks are buffered until a complete frame (terminated by a blank
+    line) is available, so a frame split across chunks is reassembled
+    before redaction. The shared :class:`StreamingRedactor` carries
+    plain-text state across frames; JSON frames are redacted per-frame
+    (see the module docstring for the JSON cross-event boundary).
+    A trailing partial frame (no blank-line terminator) is redacted
+    and emitted at stream end.
+    """
+    redactor = StreamingRedactor()
+    buffer = ""
+    async for chunk in chunks:
+        if isinstance(chunk, bytes):
+            chunk = chunk.decode("utf-8", errors="replace")
+        if not isinstance(chunk, str) or not chunk:
+            continue
+        buffer += chunk
+        while "\n\n" in buffer:
+            frame, buffer = buffer.split("\n\n", 1)
+            redacted = _redact_sse_frame(frame, redactor)
+            if redacted.strip():
+                yield redacted + "\n\n"
+    # Trailing partial frame.
+    if buffer.strip():
+        redacted = _redact_sse_frame(buffer, redactor)
+        if redacted.strip():
+            yield redacted + "\n\n"
+    # Flush held-back plain-text suffixes (a suspicious tail is
+    # redacted as a partial, never emitted raw).
+    tail = redactor.flush()
+    if tail:
+        yield "data: " + tail + "\n\n"

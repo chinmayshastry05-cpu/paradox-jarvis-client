@@ -1,0 +1,34 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- ~/openjarvis-merge/.venv/bin/python
+rootdir: ~/openjarvis-merge
+configfile: pyproject.toml
+plugins: anyio-4.12.1, xdist-3.8.0, respx-0.23.1, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/smoke/test_free_tts.py::test_free_tts_synthesizes_audio PASSED     [100%]
+
+=============================== warnings summary ===============================
+tests/smoke/test_free_tts.py::test_free_tts_synthesizes_audio
+  ~/openjarvis-merge/.venv/lib/python3.12/site-packages/torch/nn/modules/rnn.py:1011: UserWarning: dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=0.2 and num_layers=1
+    super().__init__("LSTM", *args, **kwargs)
+
+tests/smoke/test_free_tts.py::test_free_tts_synthesizes_audio
+  ~/openjarvis-merge/.venv/lib/python3.12/site-packages/torch/nn/utils/weight_norm.py:145: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+    WeightNorm.apply(module, name, dim)
+
+tests/smoke/test_free_tts.py::test_free_tts_synthesizes_audio
+  ~/openjarvis-merge/.venv/lib/python3.12/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/smoke/test_free_tts.py::test_free_tts_synthesizes_audio
+  ~/openjarvis-merge/.venv/lib/python3.12/site-packages/misaki/en.py:143: DeprecationWarning: open_text is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+    with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_gold.json") as r:
+
+tests/smoke/test_free_tts.py::test_free_tts_synthesizes_audio
+  ~/openjarvis-merge/.venv/lib/python3.12/site-packages/misaki/en.py:145: DeprecationWarning: open_text is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+    with importlib.resources.open_text(data, f"{'gb' if british else 'us'}_silver.json") as r:
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 1 passed, 5 warnings in 374.35s (0:06:14) ===================
+SMOKE_EXIT:0

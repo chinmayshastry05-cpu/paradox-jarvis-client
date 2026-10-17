@@ -1,0 +1,3 @@
+# Verification logs are raw evidence and are intentionally tracked,
+# even though the root .gitignore ignores *.log everywhere else.
+!*.log

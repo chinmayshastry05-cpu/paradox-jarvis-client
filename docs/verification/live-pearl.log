@@ -1,0 +1,12 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- ~/openjarvis-merge/.venv/bin/python
+rootdir: ~/openjarvis-merge
+configfile: pyproject.toml
+plugins: anyio-4.12.1, xdist-3.8.0, respx-0.23.1, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 10 items / 9 deselected / 1 selected
+
+tests/mining/test_cpu_pearl.py::test_provider_runs_end_to_end_on_this_host SKIPPED [100%]
+
+======================= 1 skipped, 9 deselected in 0.04s =======================
+pearl EXIT:0

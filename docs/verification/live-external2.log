@@ -1,0 +1,14 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- ~/openjarvis-merge/.venv/bin/python
+rootdir: ~/openjarvis-merge
+configfile: pyproject.toml
+plugins: anyio-4.12.1, xdist-3.8.0, respx-0.23.1, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 3 items
+
+tests/evals/comparison/test_live_external.py::TestLiveExternal::test_hermes_runner_emits_valid_json SKIPPED [ 33%]
+tests/evals/comparison/test_live_external.py::TestLiveExternal::test_openclaw_runner_emits_valid_json SKIPPED [ 66%]
+tests/evals/comparison/test_live_external.py::TestLiveExternal::test_end_to_end_runs_one_config SKIPPED [100%]
+
+============================== 3 skipped in 0.05s ==============================
+EXTERNAL_EXIT:0

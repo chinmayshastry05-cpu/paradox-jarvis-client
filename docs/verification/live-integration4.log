@@ -1,0 +1,78 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.6.0 -- ~/openjarvis-merge/.venv/bin/python
+rootdir: ~/openjarvis-merge
+configfile: pyproject.toml
+plugins: anyio-4.12.1, xdist-3.8.0, respx-0.23.1, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 5 items
+
+tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_system_builder_discovers_skills FAILED [ 20%]
+tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_skill_catalog_in_system_prompt FAILED [ 40%]
+tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_skill_tool_invocation_returns_content FAILED [ 60%]
+tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_agent_ask_with_skills_available PASSED [ 80%]
+tests/skills/test_integration_live.py::TestSkillEventsAndTracing::test_skill_execution_emits_events PASSED [100%]
+
+=================================== FAILURES ===================================
+_______ TestSkillSystemIntegration.test_system_builder_discovers_skills ________
+
+self = <tests.skills.test_integration_live.TestSkillSystemIntegration object at 0x765f826c8e00>
+
+    def test_system_builder_discovers_skills(self):
+        """SystemBuilder.build() discovers installed skills and adds them to tools."""
+        _ensure_ollama_registered()
+        system = SystemBuilder().engine("ollama").model("qwen3.5:4b").build()
+        try:
+            assert system.skill_manager is not None, "SkillManager should be created"
+            skill_names = system.skill_manager.skill_names()
+>           assert len(skill_names) > 0, f"Should discover skills, got: {skill_names}"
+E           AssertionError: Should discover skills, got: []
+E           assert 0 > 0
+E            +  where 0 = len([])
+
+tests/skills/test_integration_live.py:46: AssertionError
+________ TestSkillSystemIntegration.test_skill_catalog_in_system_prompt ________
+
+self = <tests.skills.test_integration_live.TestSkillSystemIntegration object at 0x765ec01d87d0>
+
+    def test_skill_catalog_in_system_prompt(self):
+        """The skill catalog XML should be generated correctly."""
+        bus = EventBus()
+        mgr = SkillManager(bus=bus)
+        from pathlib import Path
+    
+        mgr.discover(paths=[Path("~/.openjarvis/skills/").expanduser()])
+    
+        catalog = mgr.get_catalog_xml()
+        assert "<available_skills>" in catalog
+>       assert "research-and-summarize" in catalog
+E       AssertionError: assert 'research-and-summarize' in '<available_skills>\n</available_skills>'
+
+tests/skills/test_integration_live.py:70: AssertionError
+____ TestSkillSystemIntegration.test_skill_tool_invocation_returns_content _____
+
+self = <tests.skills.test_integration_live.TestSkillSystemIntegration object at 0x765ec01d8b30>
+
+    def test_skill_tool_invocation_returns_content(self):
+        """Invoking a skill tool returns meaningful content."""
+        bus = EventBus(record_history=True)
+        mgr = SkillManager(bus=bus)
+        from pathlib import Path
+    
+        mgr.discover(paths=[Path("~/.openjarvis/skills/").expanduser()])
+    
+        # Test instruction-only skill
+        tools = mgr.get_skill_tools()
+        code_explainer = next(
+            (t for t in tools if "code-explainer" in t.spec.name), None
+        )
+>       assert code_explainer is not None, "code-explainer skill should exist"
+E       AssertionError: code-explainer skill should exist
+E       assert None is not None
+
+tests/skills/test_integration_live.py:88: AssertionError
+=========================== short test summary info ============================
+FAILED tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_system_builder_discovers_skills
+FAILED tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_skill_catalog_in_system_prompt
+FAILED tests/skills/test_integration_live.py::TestSkillSystemIntegration::test_skill_tool_invocation_returns_content
+========================= 3 failed, 2 passed in 43.33s =========================
+INTEGRATION_EXIT:1

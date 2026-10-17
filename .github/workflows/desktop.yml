@@ -1,0 +1,54 @@
+# Desktop release build (Tauri).
+#
+# Builds the Tauri desktop app with the release config, which enables
+# updater artifacts and bundles the Ollama sidecar binary. Local builds
+# keep updater artifacts off (see tauri.conf.json).
+#
+# Trigger is manual-only (workflow_dispatch) until the owner enables
+# automatic release triggers after review. Dispatch from a tag so the
+# updater JSON upload has a release to attach to.
+name: Desktop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            args: ""
+          - os: macos-latest
+            args: ""
+          - os: windows-latest
+            args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Write release Tauri config
+        # Tauri reads JSON; this YAML block is the single source for the
+        # release overrides and is converted to JSON at build time.
+        run: |
+          cat > /tmp/tauri-release-config.yml <<'EOF'
+          bundle:
+            createUpdaterArtifacts: true
+            externalBin: ['binaries/ollama']
+          EOF
+          python3 -c "import json, yaml; json.dump(yaml.safe_load(open('/tmp/tauri-release-config.yml')), open('frontend/src-tauri/tauri.release.conf.json', 'w'), indent=2)"
+      - name: Build desktop app
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: frontend
+          args: ${{ matrix.args }} --config src-tauri/tauri.release.conf.json
+          uploadUpdaterJson: true
